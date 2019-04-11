@@ -1,2 +1,6 @@
 *.pyc
 anythumbnailer.egg-info
+venv/
+build/
+dist/
+.vscode

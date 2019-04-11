@@ -11,6 +11,21 @@ import tempfile
 
 from .sh_utils import run
 
+try:
+    unicode = unicode
+except NameError:
+    # 'unicode' is undefined, must be Python 3
+    str = str
+    unicode = str
+    bytes = bytes
+    basestring = (str,bytes)
+else:
+    # 'unicode' exists, must be Python 2
+    str = str
+    unicode = unicode
+    bytes = str
+    basestring = basestring
+
 __all__ = ['create_thumbnail']
 
 
@@ -104,16 +119,21 @@ class Poppler(Thumbnailer):
                                        dimensions=dimensions, page=page)
 
             run(pdftoppm_args)
-            pnm_filename1 = temp_ppm_tpl_file.name + "-000001.ppm"
-            pnm_filename2 = temp_ppm_tpl_file.name + "-1.ppm"
-            if os.path.isfile(pnm_filename1):
-                pnm_filename = pnm_filename1
-            elif os.path.isfile(pnm_filename2):
-                pnm_filename = pnm_filename2
 
-            pnm_fp = open(pnm_filename, 'r+')
-            pnm_converter_args = PNMToImage().pipe_args(dimensions=dimensions, output_format=output_format)
-            return run(pnm_converter_args, input_=pnm_fp)
+            last_index = temp_ppm_tpl_file.name.rfind('/')
+
+            folderpath = temp_ppm_tpl_file.name[:last_index]
+            fn = temp_ppm_tpl_file.name[last_index+1:]
+
+            found = [filename for filename in os.listdir(folderpath) if filename.startswith(fn) and filename.endswith('1.ppm')]
+
+            pnm_filename = f'{folderpath}/{found[0]}'
+
+            with open(pnm_filename, 'rb+') as pnm_fp:
+                pnm_converter_args = PNMToImage().pipe_args(dimensions=dimensions, output_format=output_format)
+                ret = run(pnm_converter_args, input_=pnm_fp)
+
+            return ret
         finally:
             if temp_fp is not None:
                 temp_fp.close()
@@ -153,7 +173,11 @@ class FileOutputThumbnailer(Thumbnailer):
             output_filename = self._find_output_filename(temp_dir, output_format)
             if output_filename is None:
                 return None
-            return BytesIO(file(output_filename, 'rb').read())
+
+            with open(output_filename, 'rb') as of:
+                of_contents = of.read()
+                
+            return BytesIO(of_contents)
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -257,6 +281,7 @@ thumbnailers = {
     re.compile('^'+re.escape('application/vnd.ms-')): Unoconv, # xls/ppt
     re.compile('^'+re.escape('application/vnd.openxmlformats-officedocument.')): Unoconv, # docx, pptx, xlsx
     'application/vnd.ms-excel.sheet.macroEnabled.12': Unoconv, # xlsm: xlsx with macros
+    'application/octet-stream': Unoconv, # Some docx files get saved to this somehow...
 
     # specific mime types have precedence over regexes so PNMToImage will be
     # preferred over ImageMagick for pnm files.

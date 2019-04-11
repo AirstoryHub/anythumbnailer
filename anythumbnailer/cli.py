@@ -15,7 +15,8 @@ def main():
         sys.stderr.write('No suitable thumbnailer found.\n')
         sys.exit(10)
     if output_filename:
-        file(output_filename, 'wb').write(thumbnail_fp.read())
+        with open(output_filename, 'wb') as out: 
+            out.write(thumbnail_fp.read())
     else:
         sys.stdout.write(thumbnail_fp.read())
 
